@@ -15,3 +15,10 @@
 - Allow for GameXP tracking
 - Allow for Game Saves
 
+
+## DETA INFO
+
+- [https://web.deta.sh/studio](https://web.deta.sh/studio)
+- Run `Open GameLytics` to open project
+
+
