@@ -89,14 +89,14 @@ def add_high_score(event):
 def get_player_high_score(event):
     game_key = event.json.get("key")
     player_name = event.json.get("player_name")
-    return JSON({"success": True, "highscores": Highscore.get_player_score(player_name, game_key)})
+    return JSON({"success": True, "player": Highscore.get_player_score(player_name, game_key)})
 
 
 @app.lib.http("/player/highscore/clear/", methods=['POST'])
 def clear_player_high_score(event):
     game_key = event.json.get("key")
     player_name = event.json.get("player_name")
-    return JSON({"success": True, "highscores": Highscore.clear_player_score(player_name, game_key)})
+    return JSON({"success": True, "player": Highscore.clear_player_score(player_name, game_key)})
 
 
 @app.lib.http('/all/', methods=['GET'])
@@ -119,5 +119,6 @@ def clear(event):
 @app.lib.http("/", methods=["GET"])
 def get_handler(event):
     name = event.params.get("name")
-    return HTML("<html><body><h1>WIP</h1></body></html>")
+    raw_html = open("wip.html").read()
+    return HTML(raw_html)
 

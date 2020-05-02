@@ -114,18 +114,41 @@ class Highscore:
             return 0
 
     @staticmethod
+    def clear_player_score(player_name, key):
+        player_game_id = '%s_%s' % (player_name, key)
+        try:
+            player = Player(id=player_game_id, name=player_name, score=0)
+            db.put(player_game_id, player.toJSON())
+            return player.toJSON()
+        except:
+            return None
+
+    @staticmethod
     def get_players(key):
         try:
             gameID = db.get(key)['data']
             game = db.get(gameID)['data']
             playersData = []
 
-            for player in game.players:
+            for player in game['players']:
                 playersData.append(db.get(player)['data'])
 
             return playersData
         except KeyError:
             return []
+
+    @staticmethod
+    def clear(key):
+        gameID = db.get(key)['data']
+        game = db.get(gameID)['data']
+        playersData = []
+
+        for player in game['players']:
+            db.delete(player)
+        game['players'] = []
+
+        db.put(gameID, game)
+        return playersData
 
 
     @staticmethod
