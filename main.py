@@ -1,116 +1,141 @@
-from deta.lib import app
-from highscore import Highscore
-from deta.lib.responses import JSON, HTML
+from deta.lib import Database
+import secrets
+import json
+
+db = Database("highscores")
 
 
-@app.lib.http("/register/", methods=["POST"])
-def post_register_new_game(event):
-    email = event.json.get("email")
-    game_title = event.json.get("game_title")
+class Player:
+    id = None
+    name = None
+    score = 0
 
-    # here we create a new db entry if one doesn't exist per game and password
-    # set current limit to 2 games per email
-    game_key, message = Highscore.create_game(email, game_title)
+    def __init__(self, id, name, score):
+        self.id = id
+        self.name = name
+        self.score = score
 
-    if game_key:
-        return JSON({
-            "success": True,
-            "game_key": game_key
-        })
-    else:
-        return JSON({
-            "success": False,
-            "message": message
-        })
+    def toJSON(self):
+        return json.dumps(self, default=lambda o: o.__dict__,
+                          sort_keys=True, indent=4)
 
 
-@app.lib.http("/recover/key/", methods=["POST"])
-def post_register_new_game(event):
-    email = event.json.get("email")
-    game_title = event.json.get("game_title")
+class Game:
+    id = None
+    token = None
+    email = None
+    gameTitle = None
+    players = []
 
-    game_key, message = Highscore.recover_key(email, game_title)
+    def __init__(self, id, token, email, gameTitle):
+        self.id = id
+        self.token = token
+        self.email = email
+        self.gameTitle = gameTitle
 
-    if game_key:
-        return JSON({
-            "success": True,
-            "game_key": game_key
-        })
-    else:
-        return JSON({
-            "success": False,
-            "message": message
-        })
-
-
-@app.lib.http("/player/exists/", methods=['POST'])
-def add_high_score(event):
-    game_key = event.json.get("key")
-    player_name = event.json.get("player_name")
-
-    return JSON({
-        "success": True,
-        "player_exist": Highscore.player_exist(player_name, game_key)
-    })
+    def toJSON(self):
+        return {
+            "id": self.id,
+            "token": self.token,
+            "email": self.email,
+            "gameTitle": self.gameTitle,
+            "players": self.players
+        }
 
 
-@app.lib.http("/players/")
-def get_list_of_players(event):
-    game_key = event.json.get("key")
+class Highscore:
 
-    return JSON({
-        "success": True,
-        "player_exist": Highscore.player_exist(player_name, game_key)
-    })
+    @staticmethod
+    def create_game(email, game_title):
+        def generate_game_key():
+            token = secrets.token_urlsafe(32)
+            try:
+                db.get(token)
+                return generate_game_key()
+            except:
+                return token
+
+        id = "%s_%s" % (email, game_title.replace(" ", ""))
+
+        try:
+            db.get(id)
+            return None, "Token for Game Exists"
+        except KeyError:
+            token = generate_game_key()
+            game = Game(id=id, token=token, email=email, gameTitle=game_title)
+            db.put(id, game.toJSON())
+            db.put(token, id)
+
+        return token, None
+
+    @staticmethod
+    def recover_key(email, game_title):
+        id = "%s_%s" % (email, game_title.replace(" ", ""))
+
+        try:
+            return db.get(id)['data']['token'], None
+        except KeyError:
+            return None, "Game Key Does Not Exist"
+
+    @staticmethod
+    def player_exist(player_name, key):
+        player_game_id = '%s_%s' % (player_name, key)
+
+        try:
+            db.get(player_game_id)
+            return True
+        except KeyError:
+            return False
+
+    @staticmethod
+    def add_score(player_name, key, score):
+        player_game_id = '%s_%s' % (player_name, key)
+        player = Player(id=player_game_id, name=player_name, score=score)
+        db.put(player_game_id, player.toJSON())
+
+        try:
+            gameID = db.get(key)['data']
+            game = db.get(gameID)['data']
+
+            if player_game_id not in game['players']:
+                game['players'].append(player_game_id)
+                db.put(gameID, game)
+        except:
+            return False, "cannot add player to game"
+
+        return True, None
+
+    @staticmethod
+    def get_player_score(player_name, key):
+        player_game_id = '%s_%s' % (player_name, key)
+        try:
+            return db.get(player_game_id)['data']
+        except KeyError:
+            return 0
+
+    @staticmethod
+    def get_players(key):
+        try:
+            gameID = db.get(key)['data']
+            game = db.get(gameID)['data']
+            playersData = []
+
+            for player in game['players']:
+                playersData.append(db.get(player)['data'])
+
+            return playersData
+        except KeyError:
+            return []
 
 
-@app.lib.http("/addScore/", methods=['POST'])
-def add_high_score(event):
-    game_key = event.json.get("key")  ## this is unique per game
-    player_name = event.json.get("player_name")
-    score = event.json.get("score")
+    @staticmethod
+    def all():
+        return db.all()
 
-    # here we match the key/id
-    added, message = Highscore.add_score(player_name, game_key, score)
+    @staticmethod
+    def clearAll():
+        all = db.all()
 
-    if added:
-        return JSON({
-            "success": True,
-            "message": "Added High Score"
-        })
-    else:
-        return JSON({
-            "success": False,
-            "message": message
-        })
-
-
-@app.lib.http("/game/highscores/alltime/", methods=['POST'])
-def get_ranked_all_time_high_scores(event):
-    game_key = event.json.get("key")
-    return JSON({"success": True, "highscores": Highscore.get_ranked_game_scores(game_key)})
-
-
-@app.lib.http("/player/highscore/", methods=['POST'])
-def get_player_high_score(event):
-    game_key = event.json.get("key")
-    player_name = event.json.get("player_name")
-    return JSON({"success": True, "highscores": Highscore.get_player_score(player_name, game_key)})
-
-
-@app.lib.http('/all/', methods=['GET'])
-def all(event):
-    return JSON({"success": True, "all": Highscore.all()})
-
-
-@app.lib.http("/highscore/clear/", methods=['POST'])
-def clear(event):
-    Highscore.clearAll()
-    return JSON({"success": True})
-
-
-@app.lib.http("/", methods=["GET"])
-def get_handler(event):
-    name = event.params.get("name")
-    return HTML("<html><body><h1>WIP</h1></body></html>")
-
+        for record in all:
+            key = record['key']
+            db.delete(key)

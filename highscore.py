@@ -10,6 +10,11 @@ class Player:
     name = None
     score = 0
 
+    def __init__(self, id, name, score):
+        self.id = id
+        self.name = name
+        self.score = score
+
     def toJSON(self):
         return json.dumps(self, default=lambda o: o.__dict__,
                           sort_keys=True, indent=4)
@@ -85,7 +90,8 @@ class Highscore:
     @staticmethod
     def add_score(player_name, key, score):
         player_game_id = '%s_%s' % (player_name, key)
-        db.put(player_game_id, score)
+        player = Player(id=player_game_id, name=player_name, score=score)
+        db.put(player_game_id, player.toJSON())
 
         try:
             gameID = db.get(key)['data']
@@ -110,9 +116,17 @@ class Highscore:
     @staticmethod
     def get_players(key):
         try:
-            return db.get(key)['data']['players']
+            gameID = db.get(key)['data']
+            game = db.get(gameID)['data']
+            playersData = []
+
+            for player in game.players:
+                playersData.append(db.get(player)['data'])
+
+            return playersData
         except KeyError:
             return []
+
 
     @staticmethod
     def all():
